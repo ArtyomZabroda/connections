@@ -5,10 +5,7 @@
 #include <ws2tcpip.h>
 #include <string>
 #include <stdexcept>
-#include <memory>
 #include <iostream>
-#include <vector>
-#include <optional>
 namespace zabroda {
 
 	// 
