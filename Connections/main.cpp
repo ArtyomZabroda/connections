@@ -1,10 +1,13 @@
 #include "connection.h"
 #include <iostream>
 
-int main() {
+int main(int argc, char* argv[]) {
 	try {
-		zabroda::TcpConnection con{ std::cin, std::cout, "tcpbin.com", "4242" }; // tcp echo server
-		con.start_protocol();
+		if (argc == 3) {
+			zabroda::TcpConnection con{ std::cin, std::cout, argv[1], argv[2] }; // tcp echo server
+			con.start_protocol();
+		}
+		else throw std::exception("Usage: Connections <hostname> <port>");
 	}
 	catch (std::exception& e) {
 		std::cerr << e.what();
