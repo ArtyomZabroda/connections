@@ -24,6 +24,7 @@
     <ProjectGuid>{ef2a2e38-ca76-42ae-b179-448406328210}</ProjectGuid>
     <RootNamespace>Telnet</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Connections</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

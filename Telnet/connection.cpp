@@ -3,25 +3,14 @@
 unsigned long long zabroda::TcpConnection::connections_amount = 0;
 
 zabroda::TcpConnection::TcpConnection(std::istream& is, std::ostream& os, const std::string& hostname, const std::string& port)
-	: hostname_(hostname), port_(port)
+	: hostname_(hostname), port_(port), is_(is), os_(os)
 {
 	if (connections_amount == 0)
-		initialize_winsock();
+		initialize_winsock_();
 	++connections_amount;
-	initialize_hints();
-	AddrinfoResults results_{ hostname, port, hints_ }; // TODO: May be I should move it into TcpSocket
-	TcpSocket sock{ results_.begin() }; // TODO: Need to find better way to manage infinite loop in thread
-	std::string input;
-	std::jthread th{ [&os, &sock]() {
-		try {
-			while (true) os << sock.recv();
-		}
-		catch (RecvError& e) {  }
-	} };
-	while (std::getline(is, input)) {
-		sock.send(input + '\n');
-	}
-	sock.~TcpSocket();
+	initialize_hints_();
+	results_ = AddrinfoResults{ hostname, port, hints_ };
+	sock_ = TcpSocket{ results_.begin() };
  }
 
 zabroda::TcpConnection::~TcpConnection()
@@ -32,7 +21,7 @@ zabroda::TcpConnection::~TcpConnection()
 		WSACleanup();
 }
 
-void zabroda::TcpConnection::initialize_hints()
+void zabroda::TcpConnection::initialize_hints_()
 {
 	ZeroMemory(&hints_, sizeof(hints_));
 	hints_.ai_family = AF_UNSPEC;
@@ -40,7 +29,22 @@ void zabroda::TcpConnection::initialize_hints()
 	hints_.ai_protocol = IPPROTO_TCP;
 }
 
-void zabroda::TcpConnection::initialize_winsock()
+void zabroda::TcpConnection::start_protocol()
+{
+	std::string input;
+	std::jthread th{ [this]() {
+		try {
+			while (true) os_ << sock_.recv();
+		}
+		catch (RecvError& e) {}
+	} };
+	while (std::getline(is_, input)) {
+		sock_.send(input + "\r\n");
+	}
+	sock_.~TcpSocket();
+}
+
+void zabroda::TcpConnection::initialize_winsock_()
 {
 	WSADATA wsaData;
 
@@ -80,13 +84,13 @@ zabroda::TcpSocket::~TcpSocket()
 	closesocket(connect_socket_);
 }
 
-void zabroda::TcpSocket::send(std::string sendbuf, int flags)
+void zabroda::TcpSocket::send(std::string sendbuf, int flags) const
 {
 	if (::send(connect_socket_, sendbuf.c_str(), sendbuf.length(), flags) == SOCKET_ERROR)
 		throw SendError{"send failed"};
 }
 
-std::string zabroda::TcpSocket::recv(int flags)
+std::string zabroda::TcpSocket::recv(int flags) const
 {
 	char buf[default_buflen];
 	int iResult;
@@ -94,6 +98,23 @@ std::string zabroda::TcpSocket::recv(int flags)
 	if (iResult < 0) throw RecvError{ "recv failed" };
 	std::string result_str{ buf, static_cast<size_t>(iResult) };
 	return result_str;
+}
+
+zabroda::TcpSocket::TcpSocket(TcpSocket&& right) noexcept
+	: connect_socket_(right.connect_socket_), chosen_result_(right.chosen_result_)
+{
+	right.connect_socket_ = INVALID_SOCKET;
+	right.chosen_result_ = nullptr;
+}
+
+zabroda::TcpSocket & zabroda::TcpSocket::operator=(TcpSocket && right) noexcept
+{
+	closesocket(connect_socket_);
+	connect_socket_ = right.connect_socket_;
+	chosen_result_ = right.chosen_result_;
+	right.connect_socket_ = INVALID_SOCKET;
+	right.chosen_result_ = nullptr;
+	return *this;
 }
 
 zabroda::AddrinfoResults::AddrinfoResults(const std::string& hostname, const std::string& port, const addrinfo& hints)
@@ -106,4 +127,18 @@ zabroda::AddrinfoResults::AddrinfoResults(const std::string& hostname, const std
 zabroda::AddrinfoResults::~AddrinfoResults()
 {
 	freeaddrinfo(raw_results_);
+}
+
+zabroda::AddrinfoResults::AddrinfoResults(AddrinfoResults&& right) noexcept
+{
+	raw_results_ = right.raw_results_;
+	right.raw_results_ = nullptr;
+}
+
+zabroda::AddrinfoResults& zabroda::AddrinfoResults::operator=(AddrinfoResults&& right) noexcept
+{
+	freeaddrinfo(raw_results_);
+	raw_results_ = right.raw_results_;
+	right.raw_results_ = nullptr;
+	return *this;
 }
